@@ -1,3 +1,6 @@
+save_folder/*
+
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -109,6 +112,7 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+config.json
 
 # Spyder project settings
 .spyderproject
@@ -127,3 +131,4 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+

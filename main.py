@@ -28,11 +28,6 @@ else:
 count = 0
 
 
-
-
-
-
-
 if not TARGET_REACTION:
     TARGET_REACTION = 'closed_lock_with_key'
 
