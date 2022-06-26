@@ -1,3 +1,9 @@
 {
-    "SLACK_TOKEN": "enter your slack app credential here"
+    "SLACK_TOKEN": "",
+    "BOX_USER_ID" : "",
+    "SLACK_CHANNEL_NAMES" : [
+        "testchannel2",
+        "general"
+    ],
+    "TIMEOUT" : 450
 }
