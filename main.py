@@ -56,6 +56,7 @@ t_delta = datetime.timedelta(hours=9)
 JST = datetime.timezone(t_delta, 'JST')
 now = datetime.datetime.now(JST)
 TS_TODAY = datetime.datetime(now.year,now.month,now.day,0,0,0,tzinfo=JST).timestamp()
+
 TS_YESTERDAY = datetime.datetime(now.year,now.month,now.day - 1,0,0,0,tzinfo=JST).timestamp()
 #デフォルトは昨日分アップロードなので、昨日分のフォルダを作る
 DATEFOLDERNAME = datetime.datetime(now.year,now.month,now.day - 1,0,0,0,tzinfo=JST).strftime('%Y%m%d')
@@ -289,13 +290,37 @@ def get_channel_messages(channel_ids) -> list:
     
     return rtnmessages
 
-    #mainエリア
+#mainエリア
 
+#################テスト用
+#TODO: 日ごとの実行にする
+########################
+
+TS_TODAY = datetime.datetime(now.year,now.month,now.day+1,0,0,0,tzinfo=JST).timestamp()
+
+#対象チャンネル名とチャンネルIDの紐づけ
 slack_ids_names = get_slack_channel_ids_names(SLACK_CHANNEL_NAMES)
+
+#チャンネルidのみの取得
 channel_ids = [row[1] for row in slack_ids_names]
-#SLACKからダウンロード候補リストを取得する
-file_ids = slack_filelist_for_download(channels = channel_ids, ts_to = TS_TODAY, ts_from = 0)
+
+#TODO: completed.jsonの確認
+#boxからcompleted.jsonのダウンロード
+#TS_TODAYが大きい、もしくはTS_YESTERDAYが小さい場合に処理
+
+##############
+#メイン実行エリア
+##############
+
+#TODO: completed.jsonの作成
+#TS_TODAYとTS_YESTERDAYを保管しておく
+
+
+#依頼書作成領域
+
 slack_channel_messages = get_channel_messages(channel_ids)
+
+
 
 #依頼書の格納リスト
 
@@ -377,6 +402,7 @@ for message in slack_channel_messages:
                     state = 1
         feedbacklist.append(dictforfeedbackcsv)
 
+#####Excelの保存###############################################
 import pandas as pd
 
 if iraisyolist:
@@ -386,8 +412,13 @@ if iraisyolist:
 if feedbacklist:
     fdcsv = pd.DataFrame(feedbacklist)
     fdcsv.to_excel('feedback.xlsx', sheet_name='new_sheet_name',index=False, header=True)
+##############################################################
 
-######fileリストからファイルのダウンロード##################################
+#ファイルダウンロード領域
+
+#SLACKからダウンロード候補リストを取得する
+file_ids = slack_filelist_for_download(channels = channel_ids, ts_to = TS_TODAY, ts_from = 0)
+######fileリストから重複を削除##################################
 import requests
 import codecs
 
@@ -425,7 +456,7 @@ for file in file_ids:
         #存在している場合は削除する
         # file_ids.remove(file)
     else:
-        uniq_filelist_for_download.append[file]
+        uniq_filelist_for_download.append(file)
         logger.info(f"file name:{file['file_name']} is new file")
     
 
