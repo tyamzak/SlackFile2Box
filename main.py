@@ -180,15 +180,16 @@ def get_slack_channel_ids_names(channel_names:list):
     
     local_slack_ids_names = []
     global slack_client
-    res = slack_client.conversations_list()
+    #publicとprivateの両方を対象にする
+    res = slack_client.conversations_list(types="public_channel, private_channel")
     if res:
         slack_channel_names = res['channels']
 
 
-
+    #名前, id, 作成時のタイムスタンプを取得
     for chname in slack_channel_names:
         if chname['name'] in channel_names and chname["is_channel"]:
-            local_slack_ids_names.append([chname['name'],chname['id']])
+            local_slack_ids_names.append([chname['name'],chname['id'],str(chname['created'])])
 
     return local_slack_ids_names
     
@@ -348,20 +349,8 @@ def is_yet_uploaded(TS_TODAY:str, TS_YESTERDAY:str):
         logger.info(f"{yester} is new date")
         return True, COMPLETED_ID
 
-    print("いらないかもしれない所が実行されてしまった")
-    #timestampだったら実行する
-    if PAST_TS_TODAY == 'timestamp' or PAST_TS_YESTERDAY == 'timestamp':
-        return True, COMPLETED_ID
-    #TS_TODAYがPAST＿TS＿TODAYより大きい場合は実行する
-    elif float(PAST_TS_TODAY) <= float(TS_TODAY):
-        return True, COMPLETED_ID
-    #TS_YESTERDAYがPAST_TS_YESTERDAYより小さい場合は実行する
-    elif float(PAST_TS_YESTERDAY) >= float(TS_YESTERDAY):
-        return True, COMPLETED_ID
     
-    return False,""
-    
-def update_timestamp(TS_TODAY:str, TS_YESTERDAY:str, box_file_id)->bool:
+def update_timestamp(TS_TODAY:str, TS_YESTERDAY:str)->bool:
     #処理後のタイムスタンプをアップデートする
     global COMPLETED_ID
     global COMPLETED_DATE_SET
@@ -433,7 +422,7 @@ def make_workflow_csv(slack_channel_messages, channel_id, TS_YESTERDAY,TS_TODAY)
             dictforiraicsv["スレッド日時"] = datetime.datetime.fromtimestamp(float(message['ts']),tz=JST).isoformat()
 
             #項目の取得
-            for line in message['text'].split("\n"):
+            for line in message['text'].split(" *"):
                 #認識文字列の検索
                 if state == 0:
                     if SLACK_IRAISYO_STR in line:
@@ -448,7 +437,7 @@ def make_workflow_csv(slack_channel_messages, channel_id, TS_YESTERDAY,TS_TODAY)
                 elif state == 2:
                     if line != '':
                         dictforiraicsv[key] = dictforiraicsv[key] + line
-                    else:
+                    # else:
                         key = ''
                         value = ''
                         state = 1
@@ -460,11 +449,13 @@ def make_workflow_csv(slack_channel_messages, channel_id, TS_YESTERDAY,TS_TODAY)
             key = ''
             value = ''
             dictforfeedbackcsv = dict()
+            message_channel_id = message['channel_id']
+            message_channel_name =  [ row[0] for row in slack_ids_names if row[1] == message_channel_id ][0]
             dictforfeedbackcsv["チャンネル名"] = message_channel_name
             dictforfeedbackcsv["スレッド日時"] = datetime.datetime.fromtimestamp(float(message['ts']),tz=JST).isoformat()
 
             #項目の取得
-            for line in message['text'].split("\n"):
+            for line in message['text'].split(" *"):
                 #認識文字列の検索
                 if state == 0:
                     if SLACK_FEEDBACK_STR in line:
@@ -479,7 +470,7 @@ def make_workflow_csv(slack_channel_messages, channel_id, TS_YESTERDAY,TS_TODAY)
                 elif state == 2:
                     if line != '':
                         dictforfeedbackcsv[key] = dictforfeedbackcsv[key] + line
-                    else:
+                    # else:
                         key = ''
                         value = ''
                         state = 1
@@ -630,12 +621,22 @@ while True:
         file_ids = slack_filelist_for_download(channels = channel_ids, ts_to = ts_to, ts_from = ts_from)
         #BOXにアップロードする
         file_upload_slack2box(file_ids)
-        
+        #outdatedcount
+        outdatedcount = 0
         for channel_id in channel_ids:
-            slack_channel_messages = get_channel_messages(channel_id, ts_to = ts_to, ts_from = ts_from)
-            make_workflow_csv(slack_channel_messages,channel_id,ts_from,ts_to)
+            ts_oldest = [x[2] for x in slack_ids_names if x[1]==channel_id][0]
+            #作成日以前は探さない
+            if float(ts_oldest) <= float(ts_from) :
+                slack_channel_messages = get_channel_messages(channel_id, ts_to = ts_to, ts_from = ts_from)
+                make_workflow_csv(slack_channel_messages,channel_id,ts_from,ts_to)
+            else:
+                outdatedcount += 1
+        
+        if outdatedcount == len(channel_ids):
+            logger.info("All Files are upload completed")
+            break
 
-        update_timestamp(ts_to,ts_from,box_file_id[1])
+        update_timestamp(ts_to,ts_from)
     past_index += 1
 
     #Timeout
