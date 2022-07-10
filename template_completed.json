@@ -1,4 +1,5 @@
 {
     "TS_TODAY" : "timestamp",
-    "TS_YESTERDAY" : "timestamp"
+    "TS_YESTERDAY" : "timestamp",
+    "COMPLETED_DATE_SET": ""
 }
