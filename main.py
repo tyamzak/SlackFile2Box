@@ -501,19 +501,31 @@ def make_workflow_csv(slack_channel_messages, channel_id, TS_YESTERDAY,TS_TODAY)
 
 
     id_datefolder = box_items['SlackUpload']['items'][channel_folder_name]['items'][date_folder_name]['id']
+    # Windows用
+    # if iraisyolist:
+    #     ircsv = pd.DataFrame(iraisyolist)
+    #     ircsv.to_excel(get_tmp_folder() + '/' + 'iraisyo.xlsx', sheet_name='new_sheet_name',index=False, header=True)
+    #     new_file = user_client.folder(folder_id=id_datefolder).upload(get_tmp_folder() + '/' + 'iraisyo.xlsx')
+    #     logger.info(f'File "{new_file.name}" uploaded to Box with file ID {new_file.id}')
 
+    # if feedbacklist:
+    #     fdcsv = pd.DataFrame(feedbacklist)
+    #     fdcsv.to_excel(get_tmp_folder() + '/' + 'feedback.xlsx', sheet_name='new_sheet_name',index=False, header=True)
+    #     new_file = user_client.folder(folder_id=id_datefolder).upload(get_tmp_folder() + '/' + 'feedback.xlsx')
+    #     logger.info(f'File "{new_file.name}" uploaded to Box with file ID {new_file.id}')
+
+    # Google Cloud Function用
     if iraisyolist:
         ircsv = pd.DataFrame(iraisyolist)
-        ircsv.to_excel(get_tmp_folder() + '/' + 'iraisyo.xlsx', sheet_name='new_sheet_name',index=False, header=True)
-        new_file = user_client.folder(folder_id=id_datefolder).upload(get_tmp_folder() + '/' + 'iraisyo.xlsx')
+        ircsv.to_csv(get_tmp_folder() + '/' + 'iraisyo.csv',index=False, header=True)
+        new_file = user_client.folder(folder_id=id_datefolder).upload(get_tmp_folder() + '/' + 'iraisyo.csv')
         logger.info(f'File "{new_file.name}" uploaded to Box with file ID {new_file.id}')
 
     if feedbacklist:
         fdcsv = pd.DataFrame(feedbacklist)
-        fdcsv.to_excel(get_tmp_folder() + '/' + 'feedback.xlsx', sheet_name='new_sheet_name',index=False, header=True)
-        new_file = user_client.folder(folder_id=id_datefolder).upload(get_tmp_folder() + '/' + 'feedback.xlsx')
+        fdcsv.to_csv(get_tmp_folder() + '/' + 'feedback.csv',index=False, header=True)
+        new_file = user_client.folder(folder_id=id_datefolder).upload(get_tmp_folder() + '/' + 'feedback.csv')
         logger.info(f'File "{new_file.name}" uploaded to Box with file ID {new_file.id}')
-
 
 def file_upload_slack2box(file_ids):
     ######fileリストからファイルのダウンロード##################################
@@ -579,67 +591,74 @@ def file_upload_slack2box(file_ids):
         os.remove(save_path)
 
 #mainエリア
-
 slack_ids_names = get_slack_channel_ids_names(SLACK_CHANNEL_NAMES)
-channel_ids = [row[1] for row in slack_ids_names]
 
-TS_TOMORROW = datetime.datetime(now.year,now.month,now.day + 1,0,0,0,tzinfo=JST).timestamp()
-TS_TODAY = datetime.datetime(now.year,now.month,now.day,0,0,0,tzinfo=JST).timestamp()
-TS_YESTERDAY = datetime.datetime(now.year,now.month,now.day - 1,0,0,0,tzinfo=JST).timestamp()
+def hello_pubsub(event, context):
+    main()
 
+def main():
+    channel_ids = [row[1] for row in slack_ids_names]
 
-#本日分を実施　完了記録は残さない　ワークフローの集計を実施しない
-ts_to = TS_TOMORROW
-ts_from = TS_TODAY
-
-if is_yet_uploaded(ts_to,ts_from):
-
-    #SLACKからダウンロード候補リストを取得する
-    file_ids = slack_filelist_for_download(channels = channel_ids, ts_to = ts_to, ts_from = ts_from)
-    #BOXにアップロードする
-    file_upload_slack2box(file_ids)
-    
-    for channel_id in channel_ids:
-        slack_channel_messages = get_channel_messages(channel_id, ts_to = ts_to, ts_from = ts_from)
-        make_workflow_csv(slack_channel_messages,channel_id,ts_from,ts_to)
+    TS_TOMORROW = datetime.datetime(now.year,now.month,now.day + 1,0,0,0,tzinfo=JST).timestamp()
+    TS_TODAY = datetime.datetime(now.year,now.month,now.day,0,0,0,tzinfo=JST).timestamp()
+    TS_YESTERDAY = datetime.datetime(now.year,now.month,now.day - 1,0,0,0,tzinfo=JST).timestamp()
 
 
+    #本日分を実施　完了記録は残さない　ワークフローの集計を実施しない
+    ts_to = TS_TOMORROW
+    ts_from = TS_TODAY
 
-
-
-#昨日以降分を実施 ワークフローの集計も実施していく
-past_index = 0
-while True:
-
-    ts_to = (datetime.datetime(now.year,now.month,now.day,0,0,0,tzinfo=JST) - datetime.timedelta(days=past_index)).timestamp()
-    ts_from  = (datetime.datetime(now.year,now.month,now.day,0,0,0,tzinfo=JST) - datetime.timedelta(days= 1 + past_index)).timestamp()
-    box_file_id = is_yet_uploaded(ts_to,ts_from)
-
-    if box_file_id[0]:
+    if is_yet_uploaded(ts_to,ts_from):
 
         #SLACKからダウンロード候補リストを取得する
         file_ids = slack_filelist_for_download(channels = channel_ids, ts_to = ts_to, ts_from = ts_from)
         #BOXにアップロードする
         file_upload_slack2box(file_ids)
-        #outdatedcount
-        outdatedcount = 0
-        for channel_id in channel_ids:
-            ts_oldest = [x[2] for x in slack_ids_names if x[1]==channel_id][0]
-            #作成日以前は探さない
-            if float(ts_oldest) <= float(ts_from) :
-                slack_channel_messages = get_channel_messages(channel_id, ts_to = ts_to, ts_from = ts_from)
-                make_workflow_csv(slack_channel_messages,channel_id,ts_from,ts_to)
-            else:
-                outdatedcount += 1
         
-        if outdatedcount == len(channel_ids):
-            logger.info("All Files are upload completed")
+        for channel_id in channel_ids:
+            slack_channel_messages = get_channel_messages(channel_id, ts_to = ts_to, ts_from = ts_from)
+            make_workflow_csv(slack_channel_messages,channel_id,ts_from,ts_to)
+
+
+
+
+
+    #昨日以降分を実施 ワークフローの集計も実施していく
+    past_index = 0
+    while True:
+
+        ts_to = (datetime.datetime(now.year,now.month,now.day,0,0,0,tzinfo=JST) - datetime.timedelta(days=past_index)).timestamp()
+        ts_from  = (datetime.datetime(now.year,now.month,now.day,0,0,0,tzinfo=JST) - datetime.timedelta(days= 1 + past_index)).timestamp()
+        box_file_id = is_yet_uploaded(ts_to,ts_from)
+
+        if box_file_id[0]:
+
+            #SLACKからダウンロード候補リストを取得する
+            file_ids = slack_filelist_for_download(channels = channel_ids, ts_to = ts_to, ts_from = ts_from)
+            #BOXにアップロードする
+            file_upload_slack2box(file_ids)
+            #outdatedcount
+            outdatedcount = 0
+            for channel_id in channel_ids:
+                ts_oldest = [x[2] for x in slack_ids_names if x[1]==channel_id][0]
+                #作成日以前は探さない
+                if float(ts_oldest) <= float(ts_from) :
+                    slack_channel_messages = get_channel_messages(channel_id, ts_to = ts_to, ts_from = ts_from)
+                    make_workflow_csv(slack_channel_messages,channel_id,ts_from,ts_to)
+                else:
+                    outdatedcount += 1
+            
+            if outdatedcount == len(channel_ids):
+                logger.info("All Files are upload completed")
+                break
+
+            update_timestamp(ts_to,ts_from)
+        past_index += 1
+
+        #Timeout
+        if time.time() - STARTTIME > TIMEOUT:
+            logger.info("TIMEOUT")
             break
 
-        update_timestamp(ts_to,ts_from)
-    past_index += 1
-
-    #Timeout
-    if time.time() - STARTTIME > TIMEOUT:
-        logger.info("TIMEOUT")
-        break
+if __name__ == "__main__":
+    main()
