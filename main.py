@@ -66,7 +66,7 @@ ROOT_FOLDER_NAME = 'SlackUpload'
 box_items = dict()
 
 ################BOXJWTクライアントを作成する#########################################jwt
-auth = JWTAuth.from_settings_file(r'904005637_ry1r2xel_config.json')
+auth = JWTAuth.from_settings_file(r'box_jwt_auth_config.json')
 
 client = Client(auth)
 service_account = client.user().get()
