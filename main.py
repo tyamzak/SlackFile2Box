@@ -57,9 +57,19 @@ t_delta = datetime.timedelta(hours=9)
 JST = datetime.timezone(t_delta, 'JST')
 now = datetime.datetime.now(JST)
 TS_TODAY = datetime.datetime(now.year,now.month,now.day,0,0,0,tzinfo=JST).timestamp()
-TS_YESTERDAY = datetime.datetime(now.year,now.month,now.day - 1,0,0,0,tzinfo=JST).timestamp()
+
+#20220801バグ対処　dayへの直接の加減算を削除 timedeltaでの処理に変更###########################################################
+    
+# TS_YESTERDAY = datetime.datetime(now.year,now.month,now.day - 1,0,0,0,tzinfo=JST).timestamp()
+
+TS_YESTERDAY  = (datetime.datetime(now.year,now.month,now.day,0,0,0,tzinfo=JST) - datetime.timedelta(days=1)).timestamp()
+
 #デフォルトは昨日分アップロードなので、昨日分のフォルダを作る
-DATEFOLDERNAME = datetime.datetime(now.year,now.month,now.day - 1,0,0,0,tzinfo=JST).strftime('%Y%m%d')
+# DATEFOLDERNAME = datetime.datetime(now.year,now.month,now.day - 1,0,0,0,tzinfo=JST).strftime('%Y%m%d')
+DATEFOLDERNAME = (datetime.datetime(now.year,now.month,now.day,0,0,0,tzinfo=JST) - datetime.timedelta(days=1)).strftime('%Y%m%d')
+
+###########################################################################################################################
+
 ROOT_FOLDER_NAME = 'SlackUpload'
 
 # グローバル　Dict構造　フォルダ名 : {"id":フォルダID, "items" : [] } "itemsの下層に別フォルダが入る"
@@ -599,10 +609,18 @@ def hello_pubsub(event, context):
 def main():
     channel_ids = [row[1] for row in slack_ids_names]
 
-    TS_TOMORROW = datetime.datetime(now.year,now.month,now.day + 1,0,0,0,tzinfo=JST).timestamp()
     TS_TODAY = datetime.datetime(now.year,now.month,now.day,0,0,0,tzinfo=JST).timestamp()
-    TS_YESTERDAY = datetime.datetime(now.year,now.month,now.day - 1,0,0,0,tzinfo=JST).timestamp()
 
+    #20220801バグ対処　dayへの直接の加減算を削除 timedeltaでの処理に変更###########################################################
+
+    # TS_TOMORROW = datetime.datetime(now.year,now.month,now.day + 1,0,0,0,tzinfo=JST).timestamp()
+    # TS_YESTERDAY = datetime.datetime(now.year,now.month,now.day - 1,0,0,0,tzinfo=JST).timestamp()
+
+
+    TS_TOMORROW = (datetime.datetime(now.year,now.month,now.day,0,0,0,tzinfo=JST) + datetime.timedelta(days=1)).timestamp()
+    TS_YESTERDAY  = (datetime.datetime(now.year,now.month,now.day,0,0,0,tzinfo=JST) - datetime.timedelta(days=1)).timestamp()
+
+    ###########################################################################################################################
 
     #本日分を実施　完了記録は残さない　ワークフローの集計を実施しない
     ts_to = TS_TOMORROW
