@@ -4,6 +4,7 @@ import sys
 from logging import getLogger, StreamHandler, DEBUG
 from boxsdk import JWTAuth, Client
 import datetime
+from pathlib import Path
 
 class BoxModule:
 
@@ -20,9 +21,10 @@ class BoxModule:
         self.handler.setLevel(logging.INFO)
         self.logger.addHandler(self.handler)
         self.logger.setLevel(logging.INFO)
-
+        
         ################BOXJWTクライアントを作成する#########################################jwt
-        self.auth = JWTAuth.from_settings_file(r'box_jwt_auth_config.json')
+        authpath = Path(__file__).parent.parent / 'box_jwt_auth_config.json'
+        self.auth = JWTAuth.from_settings_file(authpath)
 
         self.client = Client(self.auth)
         self.service_account = self.client.user().get()
@@ -32,7 +34,11 @@ class BoxModule:
         self.user_client = self.client.as_user(self.user_to_impersonate)
 
         ##################################################################################
-        
+        self.box_items
+        self.DATEFOLDERNAME
+        self.ROOT_FOLDER_NAME
+        self.COMPLETED_ID
+        self.COMPLETED_DATE_SET
     def find_and_create_folder(self, parent_folder_id:str, child_name:str) -> str:
 
         """_summary_
@@ -72,33 +78,32 @@ class BoxModule:
         Returns:
             dict: box_itemsを返す
         """
-        global box_items
-        global DATEFOLDERNAME
+
         if not date_folder_name:
-            date_folder_name = DATEFOLDERNAME
+            date_folder_name = self.DATEFOLDERNAME
 
         #保存用の最上位フォルダ
-        if not root_folder_name in box_items.keys():
+        if not root_folder_name in self.box_items.keys():
             id_slackupload = self.find_and_create_folder(0,root_folder_name)
-            box_items[root_folder_name] = {"id":id_slackupload, "items" : {}}
+            self.box_items[root_folder_name] = {"id":id_slackupload, "items" : {}}
 
-        if not channel_folder_name in box_items[root_folder_name]["items"].keys():
-            id_channelname = self.find_and_create_folder(box_items[root_folder_name]["id"] ,channel_folder_name)
-            box_items[root_folder_name]["items"][channel_folder_name] = {"id":id_channelname, "items" : {}}
+        if not channel_folder_name in self.box_items[root_folder_name]["items"].keys():
+            id_channelname = self.find_and_create_folder(self.box_items[root_folder_name]["id"] ,channel_folder_name)
+            self.box_items[root_folder_name]["items"][channel_folder_name] = {"id":id_channelname, "items" : {}}
 
-        if not date_folder_name in box_items[root_folder_name]["items"][channel_folder_name]["items"].keys():
-            id_date = self.find_and_create_folder(box_items[root_folder_name]["items"][channel_folder_name]["id"],date_folder_name)
-            box_items[root_folder_name]["items"][channel_folder_name]["items"][date_folder_name] = {"id":id_date, "items" : {}}
+        if not date_folder_name in self.box_items[root_folder_name]["items"][channel_folder_name]["items"].keys():
+            id_date = self.find_and_create_folder(self.box_items[root_folder_name]["items"][channel_folder_name]["id"],date_folder_name)
+            self.box_items[root_folder_name]["items"][channel_folder_name]["items"][date_folder_name] = {"id":id_date, "items" : {}}
 
 
         #フォルダ内アイテムを格納
-        folder_items = self.user_client.folder(folder_id=box_items[root_folder_name]["items"][channel_folder_name]["items"][date_folder_name]["id"]).get_items()
+        folder_items = self.user_client.folder(folder_id=self.box_items[root_folder_name]["items"][channel_folder_name]["items"][date_folder_name]["id"]).get_items()
         if folder_items:
             for item in folder_items:
                 print(f'{item.type.capitalize()} {item.id} is named "{item.name}"')
-                box_items[root_folder_name]["items"][channel_folder_name]["items"][date_folder_name]["items"][item.name] = item.id
+                self.box_items[root_folder_name]["items"][channel_folder_name]["items"][date_folder_name]["items"][item.name] = item.id
 
-        return box_items
+        return self.box_items
     ###################################boxファイルのリストアップ##################################
 
     def is_yet_uploaded(self, TS_TODAY:str, TS_YESTERDAY:str):
@@ -111,19 +116,16 @@ class BoxModule:
         Returns:
             str: box_file_id
         """
-        global box_items
-        global ROOT_FOLDER_NAME
-        global COMPLETED_ID
-        global COMPLETED_DATE_SET
+
 
         if  not COMPLETED_DATE_SET:
 
             #BOX上を探す
             if not COMPLETED_ID:
                 #保存用の最上位フォルダ
-                if not ROOT_FOLDER_NAME in box_items.keys():
-                    id_slackupload = self.find_and_create_folder(0,ROOT_FOLDER_NAME)
-                    box_items[ROOT_FOLDER_NAME] = {"id":id_slackupload, "items" : {}}
+                if not self.ROOT_FOLDER_NAME in self.box_items.keys():
+                    id_slackupload = self.find_and_create_folder(0,self.ROOT_FOLDER_NAME)
+                    self.box_items[self.ROOT_FOLDER_NAME] = {"id":id_slackupload, "items" : {}}
 
                 items = self.user_client.folder(folder_id=id_slackupload).get_items()
 
@@ -157,7 +159,7 @@ class BoxModule:
         else:
             self.logger.info(f"{yester} is new date")
             return True, COMPLETED_ID
-            
+
     def update_timestamp(TS_TODAY:str, TS_YESTERDAY:str)->bool:
         #処理後のタイムスタンプをアップデートする
         global COMPLETED_ID
