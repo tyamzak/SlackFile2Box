@@ -1,2 +1,4 @@
 # SlackFile2Box
 UploadSlackFilesToBox
+
+ファイルが存在しない場合にBoxフォルダが作成されないように修正

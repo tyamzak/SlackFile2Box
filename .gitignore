@@ -134,3 +134,5 @@ dmypy.json
 
 904005637_ry1r2xel_config.json
 config_bakup.json
+test_box_jwt_auth_config.json
+box_jwt_auth_config.json
