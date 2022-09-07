@@ -492,8 +492,10 @@ def make_workflow_csv(slack_channel_messages, channel_id, TS_YESTERDAY,TS_TODAY)
                         state = 1
             feedbacklist.append(dictforfeedbackcsv)
 
-    #iraisyolistもしくはfeedbacklistが空だった場合は終了する
-    if not iraisyolist or not feedbacklist:
+    #iraisyolist,feedbacklistが空だった場合は終了する
+    if iraisyolist or feedbacklist:
+        pass
+    else:
         return False
 
     import pandas as pd
