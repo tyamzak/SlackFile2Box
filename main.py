@@ -4,6 +4,7 @@ import time
 import pprint
 import sys
 from boxsdk import JWTAuth, Client
+from boxsdk.exception import BoxAPIException
 from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
 from logging import getLogger, StreamHandler, DEBUG
@@ -12,6 +13,7 @@ import json
 STARTTIME = time.time()
 COMPLETED_ID = ""
 COMPLETED_DATE_SET = set()
+DAYSLIMIT = 31
 
 with open('config.json','r',encoding='utf8') as f:
     js = json.load(f)
@@ -84,8 +86,8 @@ user_client = client.as_user(user_to_impersonate)
 ###################################全てのファイルリストの取得
 
 def slack_filelist_for_download(channels:list[str]=[],
-                            ts_from = 0,
-                            ts_to = TS_TODAY,
+                            ts_from:str = "0",
+                            ts_to:str = str(TS_TODAY),
                             page:int = 1) -> list:
     """_summary_
 
@@ -100,13 +102,16 @@ def slack_filelist_for_download(channels:list[str]=[],
     file_ids = []
     global slack_client
     
+    #タイムスタンプの文字列化
+    ts_from = str(int(ts_from))
+    ts_to = str(int(ts_to))
     
     if channels:
         for channel in channels:
             #チャンネルの下で重複チェックを行う
             names_set = set()
-            for page in slack_client.files_list(channel=channel,ts_from=ts_from, ts_to=ts_to,page=page):
-                for file in page.get("files", []):
+            for filelistpage in slack_client.files_list(channel=channel,ts_from=ts_from, ts_to=ts_to,page=page):
+                for file in filelistpage.get("files", []):
                     info = {
                             'file_id' : file["id"],
                             'channel_id' : file['channels'],
@@ -128,8 +133,8 @@ def slack_filelist_for_download(channels:list[str]=[],
                     while True:
                         i += 1
                         if datekeyname in names_set:
-                            str = info["file_name"]
-                            keystr =str.split('.')[0] + f'({i}).' + str.split('.')[1]
+                            filename = info["file_name"]
+                            keystr =filename.split('.')[0] + f'({i}).' + filename.split('.')[1]
                             datekeyname = datestr + keystr
                         else:
                             info["file_name"] = keystr
@@ -137,7 +142,7 @@ def slack_filelist_for_download(channels:list[str]=[],
                     names_set.add(datekeyname)
                     file_ids.append(info)
                 #ページがまだあるなら、再帰する
-                paging = page.get("paging")
+                paging = filelistpage.get("paging")
                 currentpage = paging["page"]
                 totalpage = paging["pages"]
                 if totalpage > currentpage:
@@ -253,12 +258,16 @@ def get_items_from_box_folder(channel_folder_name:str,date_folder_name:str="",ro
         return False
 ###################################boxファイルのリストアップ##################################
 
-def get_channel_messages(channel_id, ts_to, ts_from) -> list:
+def get_channel_messages(channel_id, ts_to:str, ts_from:str) -> list:
     
     global TIMEOUT
     global STARTTIME
     global slack_client
     
+    #タイムスタンプの文字列化
+    ts_from = str(ts_from)
+    ts_to = str(ts_to)
+
     rtnmessages = []
 
 
@@ -492,11 +501,13 @@ def make_workflow_csv(slack_channel_messages, channel_id, TS_YESTERDAY,TS_TODAY)
                         state = 1
             feedbacklist.append(dictforfeedbackcsv)
 
+
     #iraisyolist,feedbacklistが空だった場合は終了する
     if iraisyolist or feedbacklist:
         pass
     else:
         return False
+
 
     import pandas as pd
 
@@ -602,8 +613,12 @@ def file_upload_slack2box(file_ids):
     ###################################ファイルのアップロード##################################
         #フォルダIDを取得する
         upload_folder_id = box_items[ROOT_FOLDER_NAME]["items"][channel_name]["items"][date_folder_name]["id"]
-        new_file = user_client.folder(upload_folder_id).upload(save_path)
-        logger.info(f'File "{new_file.name}" uploaded to Box with file ID {new_file.id}')
+        try:
+            new_file = user_client.folder(upload_folder_id).upload(save_path)
+            logger.info(f'File "{new_file.name}" uploaded to Box with file ID {new_file.id}')
+        except BoxAPIException as e:
+            print("box_upload:" + e.message)
+
         os.remove(save_path)
 
 #mainエリア
@@ -621,8 +636,8 @@ def main():
 
 
     #本日分を実施　完了記録は残さない　ワークフローの集計を実施しない
-    ts_to = TS_TOMORROW
-    ts_from = TS_TODAY
+    ts_to = int(TS_TOMORROW)
+    ts_from = int(TS_TODAY)
 
     if is_yet_uploaded(ts_to,ts_from):
 
@@ -642,6 +657,11 @@ def main():
     #昨日以降分を実施 ワークフローの集計も実施していく
     past_index = 0
     while True:
+
+        # 31日以上前は処理しない
+        if past_index > DAYSLIMIT:
+            logger.info("31日分処理を完了。正常終了します。")
+            break
 
         ts_to = (datetime.datetime(now.year,now.month,now.day,0,0,0,tzinfo=JST) - datetime.timedelta(days=past_index)).timestamp()
         ts_from  = (datetime.datetime(now.year,now.month,now.day,0,0,0,tzinfo=JST) - datetime.timedelta(days= 1 + past_index)).timestamp()

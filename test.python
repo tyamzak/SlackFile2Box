@@ -1,0 +1,10 @@
+# make a simple http request in python
+import urllib
+# make a simple http request in python
+url = 'http://www.python.org'
+# get the response
+response = urllib.urlopen(url)
+# get the response
+data = response.read()
+# print the response
+print(data)
